@@ -3,7 +3,7 @@
  *
  * 대상 엔드포인트:
  *   POST /api/v1/portfolio
- *   POST /api/v1/portfolio/ai-analysis              ← 202 Accepted → Kafka → ai-service LLM
+ *   POST /api/v1/portfolio/ai-analysis              ← 202 Accepted → ai-service LLM
  *   GET  /api/v1/portfolio/ai-analysis/latest
  *   GET  /api/v1/portfolio/ai-analysis/:analysisId
  *   GET  /api/v1/portfolio/ai-analysis?page=&size=
@@ -21,7 +21,7 @@ import { setupTokens, authHeaders, url, checkStatus } from '../common/helpers.js
 const analysisReqDuration  = new Trend('portfolio_ai_request_duration_ms', true);
 const analysisReadDuration = new Trend('portfolio_ai_read_duration_ms', true);
 const readStressDuration   = new Trend('portfolio_read_stress_duration_ms', true);
-const aiTriggerCount       = new Counter('portfolio_ai_kafka_trigger_count');
+const aiTriggerCount       = new Counter('portfolio_ai_trigger_count');
 const portfolioErrors      = new Rate('portfolio_error_rate');
 
 export function setup() {

@@ -64,10 +64,10 @@ POST /api/v1/portfolio/ai-analysis
 
 ## 메트릭
 
-| 메트릭                                 | 임계값                   |
-|-------------------------------------|-----------------------|
-| `portfolio_ai_request_duration_ms`  | p(95) < 2000ms        |
-| `portfolio_ai_read_duration_ms`     | p(95) < 1500ms        |
-| `portfolio_read_stress_duration_ms` | p(95) < 1000ms        |
-| `portfolio_ai_kafka_trigger_count`  | AI 분석 Kafka 트리거 누적 횟수 |
-| `portfolio_error_rate`              | rate < 5%             |
+| 메트릭                                 | 임계값                |
+|-------------------------------------|--------------------|
+| `portfolio_ai_request_duration_ms`  | p(95) < 2000ms     |
+| `portfolio_ai_read_duration_ms`     | p(95) < 1500ms     |
+| `portfolio_read_stress_duration_ms` | p(95) < 1000ms     |
+| `portfolio_ai_trigger_count`        | AI 분석 요청 트리거 누적 횟수 |
+| `portfolio_error_rate`              | rate < 5%          |
