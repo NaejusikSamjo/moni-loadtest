@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { check } from 'k6';
 
-const BASE_URL = __ENV.BASE_URL || 'https://api.moni.my';
+const BASE_URL = __ENV.BASE_URL;
 
 /**
  * 테스트 시작 전 setup()에서 호출.
