@@ -13,7 +13,7 @@ k6/
 ├── stock/
 │   └── stock.test.js       # 종목 검색·상세·차트·테마·거래량
 ├── portfolio/
-│   └── portfolio.test.js   # 포트폴리오 생성·AI 분석 요청·이력 (Kafka)
+│   └── portfolio.test.js   # 포트폴리오 생성·AI 분석 요청·이력
 ├── payment/
 │   └── payment.test.js     # 구독 상태·결제 내역·검증 케이스
 ├── ai/

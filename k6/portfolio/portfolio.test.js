@@ -3,7 +3,7 @@
  *
  * 대상 엔드포인트:
  *   POST /api/v1/portfolio
- *   POST /api/v1/portfolio/ai-analysis              ← 202 Accepted → Kafka → ai-service LLM
+ *   POST /api/v1/portfolio/ai-analysis              ← 202 Accepted → ai-service LLM
  *   GET  /api/v1/portfolio/ai-analysis/latest
  *   GET  /api/v1/portfolio/ai-analysis/:analysisId
  *   GET  /api/v1/portfolio/ai-analysis?page=&size=
@@ -21,7 +21,7 @@ import { setupTokens, authHeaders, url, checkStatus } from '../common/helpers.js
 const analysisReqDuration  = new Trend('portfolio_ai_request_duration_ms', true);
 const analysisReadDuration = new Trend('portfolio_ai_read_duration_ms', true);
 const readStressDuration   = new Trend('portfolio_read_stress_duration_ms', true);
-const aiTriggerCount       = new Counter('portfolio_ai_kafka_trigger_count');
+const aiTriggerCount       = new Counter('portfolio_ai_trigger_count');
 const portfolioErrors      = new Rate('portfolio_error_rate');
 
 export function setup() {
@@ -57,7 +57,7 @@ export const options = {
       tags: { scenario: 'read_load' },
       exec: 'readScenario',
     },
-    // AI 분석 요청 → Kafka → ai-service LLM 파이프라인 전체 부하
+    // AI 분석 요청 → ai-service Feign 호출 → LLM 분석
     ai_analysis_load: {
       executor: 'constant-arrival-rate',
       rate: 3,
@@ -80,7 +80,7 @@ export const options = {
       tags: { scenario: 'read_stress' },
       exec: 'readStressScenario',
     },
-    // 순간 다수 분석 요청 — Kafka consumer lag 및 큐 깊이 관찰
+    // 순간 다수 분석 요청 — ai-service Feign 동시 호출 내구성 관찰
     ai_analysis_spike: {
       executor: 'ramping-arrival-rate',
       startRate: 0,
