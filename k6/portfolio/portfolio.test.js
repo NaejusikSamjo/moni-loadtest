@@ -3,7 +3,7 @@
  *
  * 대상 엔드포인트:
  *   POST /api/v1/portfolio
- *   POST /api/v1/portfolio/ai-analysis              ← 202 Accepted → ai-service LLM
+ *   POST /api/v1/portfolio/ai-analysis              ← 202 Accepted 또는 정책 응답
  *   GET  /api/v1/portfolio/ai-analysis/latest
  *   GET  /api/v1/portfolio/ai-analysis/:analysisId
  *   GET  /api/v1/portfolio/ai-analysis?page=&size=
@@ -21,8 +21,10 @@ import { setupTokens, authHeaders, url, checkStatus } from '../common/helpers.js
 const analysisReqDuration  = new Trend('portfolio_ai_request_duration_ms', true);
 const analysisReadDuration = new Trend('portfolio_ai_read_duration_ms', true);
 const readStressDuration   = new Trend('portfolio_read_stress_duration_ms', true);
-const aiTriggerCount       = new Counter('portfolio_ai_trigger_count');
+const aiAcceptedCount      = new Counter('portfolio_ai_accepted_count');
 const portfolioErrors      = new Rate('portfolio_error_rate');
+
+http.setResponseCallback(http.expectedStatuses({ min: 200, max: 399 }, 403, 404, 409, 429));
 
 export function setup() {
   const tokens = setupTokens();
@@ -57,7 +59,7 @@ export const options = {
       tags: { scenario: 'read_load' },
       exec: 'readScenario',
     },
-    // AI 분석 요청 → ai-service Feign 호출 → LLM 분석
+    // AI 분석 요청 부하 — 신규 요청, PENDING 멱등 응답, 정책 차단 응답을 함께 관찰
     ai_analysis_load: {
       executor: 'constant-arrival-rate',
       rate: 3,
@@ -80,7 +82,7 @@ export const options = {
       tags: { scenario: 'read_stress' },
       exec: 'readStressScenario',
     },
-    // 순간 다수 분석 요청 — ai-service Feign 동시 호출 내구성 관찰
+    // 순간 다수 분석 요청 — 멱등 응답과 정책 차단 응답 지연 관찰
     ai_analysis_spike: {
       executor: 'ramping-arrival-rate',
       startRate: 0,
@@ -150,10 +152,14 @@ export function aiAnalysisScenario(data) {
   const r = http.post(url('/api/v1/portfolio/ai-analysis'), null, authHeaders(data.tokens));
   analysisReqDuration.add(r.timings.duration);
 
+  // 202: 신규 요청 또는 오늘 PENDING 분석의 멱등 응답
   // 429: 하루 1회 제한 초과 / 403: 무료 플랜 5회 총 한도 초과 → 서비스 정책 응답으로 에러 아님
   const ok = checkStatus(r, 'ai/analysis-request', 202, 429, 403);
   portfolioErrors.add(!ok);
-  if (ok && r.status === 202) aiTriggerCount.add(1);
+  if (ok && r.status === 202) {
+    aiAcceptedCount.add(1);
+    readAcceptedAnalysisDetail(data, r, 'ai/analysis-detail');
+  }
 
   sleep(1 + Math.random());
 }
@@ -161,6 +167,35 @@ export function aiAnalysisScenario(data) {
 export function aiAnalysisSpikeScenario(data) {
   const r = http.post(url('/api/v1/portfolio/ai-analysis'), null, authHeaders(data.tokens));
   analysisReqDuration.add(r.timings.duration);
-  portfolioErrors.add(![202, 429, 403].includes(r.status));
-  checkStatus(r, 'spike/ai-analysis', 202, 429, 403);
+  const ok = checkStatus(r, 'spike/ai-analysis', 202, 429, 403);
+  portfolioErrors.add(!ok);
+  if (ok && r.status === 202) {
+    aiAcceptedCount.add(1);
+    readAcceptedAnalysisDetail(data, r, 'spike/analysis-detail');
+  }
+}
+
+function readAcceptedAnalysisDetail(data, response, label) {
+  const analysisId = extractAnalysisId(response);
+  if (!analysisId) {
+    portfolioErrors.add(true);
+    return;
+  }
+
+  const r = http.get(url(`/api/v1/portfolio/ai-analysis/${analysisId}`), authHeaders(data.tokens));
+  analysisReadDuration.add(r.timings.duration);
+  portfolioErrors.add(!checkStatus(r, label, 200));
+}
+
+function extractAnalysisId(response) {
+  if (response.status !== 202 || !response.body) {
+    return null;
+  }
+
+  try {
+    const body = JSON.parse(response.body);
+    return body && body.data && body.data.analysisId ? body.data.analysisId : null;
+  } catch (e) {
+    return null;
+  }
 }
