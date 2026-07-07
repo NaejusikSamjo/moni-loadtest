@@ -9,12 +9,13 @@
  *   GET /api/v1/stocks/top-volume
  *
  * 절대 호출 금지:
- *   POST /api/v1/stocks/download/stocks — 코스피/코스닥/테마 마스터 초기 적재용.
- *   한 번이라도 호출하면 전체 마스터 데이터가 덮어씌워짐. 테스트에 절대 포함 금지.
+ *   POST /api/v1/admin/stocks/download/stocks — 코스피/코스닥/테마 마스터 초기 적재용.
+ *   한 번이라도 호출하면 전체 마스터 데이터가 덮어씌워짐 (upsert 없이 매번 재적재, 멱등성 없음). 테스트에 절대 포함 금지.
  *
  * 실행:
  *   export $(cat .env | xargs)
  *   k6 run k6/stock/stock.test.js
+ *   MSYS_NO_PATHCONV=1 docker run --rm -i --network moni-network --env-file .env -e SCENARIO=market_overview -v "$(pwd)/k6:/scripts" grafana/k6 run /scripts/stock/stock.test.js
  */
 
 import http from 'k6/http';
@@ -36,8 +37,8 @@ export function setup() {
   return { tokens: setupTokens() };
 }
 
-export const options = {
-  scenarios: {
+// SCENARIO 환경변수로 특정 시나리오만 실행 가능 (예: -e SCENARIO=smoke). k6 run 자체에는 시나리오 필터링 플래그가 없음.
+const allScenarios = {
     smoke: {
       executor: 'constant-vus',
       vus: 2,
@@ -58,13 +59,14 @@ export const options = {
       exec: 'marketOverviewScenario',
     },
     // 종목 상세 + 차트 동시 조회 (KIS API 응답 시간 관찰)
+    // chart는 캐시 없이 매 요청마다 KIS API를 실시간 호출하므로 rate를 낮게 유지 — KIS 레이트리밋/제재 위험
     detail_chart: {
       executor: 'constant-arrival-rate',
-      rate: 20,
+      rate: 3,
       timeUnit: '1s',
       duration: '2m',
-      preAllocatedVUs: 30,
-      maxVUs: 50,
+      preAllocatedVUs: 10,
+      maxVUs: 20,
       tags: { scenario: 'detail_chart' },
       exec: 'detailChartScenario',
     },
@@ -83,7 +85,12 @@ export const options = {
       tags: { scenario: 'search_stress' },
       exec: 'searchStressScenario',
     },
-  },
+};
+
+export const options = {
+  scenarios: __ENV.SCENARIO
+    ? { [__ENV.SCENARIO]: allScenarios[__ENV.SCENARIO] }
+    : allScenarios,
   thresholds: {
     http_req_duration:        ['p(95)<1500', 'p(99)<3000'],
     http_req_failed:          ['rate<0.03'],
@@ -100,7 +107,7 @@ export function smokeScenario(data) {
   r = http.get(url('/api/v1/stocks/top-volume'), authHeaders(data.tokens));
   checkStatus(r, 'smoke/top-volume', 200);
 
-  r = http.get(url('/api/v1/stocks/search?keyword=삼성&page=0&size=10'), authHeaders(data.tokens));
+  r = http.get(url(`/api/v1/stocks/search?keyword=${encodeURIComponent('삼성')}&page=0&size=10`), authHeaders(data.tokens));
   searchDuration.add(r.timings.duration);
   checkStatus(r, 'smoke/search', 200);
 
