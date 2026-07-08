@@ -82,6 +82,7 @@ k6 run --out json=results/trade.json k6/trade/trade.test.js
 
 ## 주의사항
 
-- `POST /api/v1/stocks/download/stocks` — 코스피/코스닥/테마 마스터 초기 적재용. 한 번이라도 호출하면 전체 마스터 데이터가 덮어씌워짐. **테스트에 절대 포함 금지.**
+- `POST /api/v1/admin/stocks/download/stocks` — 코스피/코스닥/테마 마스터 초기 적재용. 한 번이라도 호출하면 전체 마스터 데이터가 덮어씌워짐(멱등성 없음). **테스트에 절대 포함 금지.**
+- stock `/top-volume`, `/:ticker/chart` — 캐시 미연결로 매 요청 KIS API 실시간 호출. 고VU로 몰면 KIS 레이트리밋(EGW00201) 걸려 503 발생 가능. rate를 낮게 유지할 것 (`k6/stock/README.md` 참고)
 - `POST /api/v1/payments/subscription` — 실제 Toss PG 연동 필요, 검증 케이스(400)만 포함
 - `DELETE /api/v1/payments/subscriptions` — 실제 구독 취소, 반복 호출 불가
